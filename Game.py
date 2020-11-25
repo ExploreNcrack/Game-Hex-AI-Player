@@ -69,17 +69,24 @@ class Game:
                     if self.sound_state:
                         self.click_sound_channel.play(self.click_sound)
                     self.state[r][c] = self.move
-
-                    #print(self.ai_player.evaluate(self.state, self.move))
-
                     self.move = 3-self.move  # the other player turn
-                    #self.ai_player.gen_move()
+
+                    # paths = []
+                    # board= self.state
+                    # unwanted = []
+                    # tops = self.ai_player.get_top_side_positions(board)
+                    # for top in tops:
+                    #     if top != [0,0]:
+                    #         unwanted.append(top)
+                    # self.ai_player.bfs_build_path(board, [0,0], [[2,0]], unwanted, [], paths)
+                    # print(paths)
+
                     ai_move = self.ai_player.strategy_move(self.state)
                     self.state[ai_move[0]][ai_move[1]] = self.move
                     self.move = 3-self.move 
-                    #print(self.ai_player.get_all_shortest_path_dijstra(self.state, [0,0], [4,4]))
-                    # for path in paths:
-                    #     self.state[path[0]][path[1]] = self.move
+
+                    #print(self.ai_player.get_all_shortest_path_dijstra(self.state, [0,0],[4,0]))
+                    
 
     def highlight(self, pos):
         '''highlights the hexagon that is under the mouse'''
@@ -143,10 +150,11 @@ class Game:
         '''shows start screen, returns True if the game has started'''
         start = True
         # initializing buttons
-        play = Button((W/2, 2*H/3), 80, 'Play')
+        ai_play_first = Button((W-150, 2*H/3), 30, 'AI Play First')
+        player_first = Button((150, 2*H/3), 30, 'You Play First')
         settings = Button((150, H-75), 50, 'Settings')
         rules = Button((W-100, H-75), 50, 'Rules')
-        buttons = [play, settings, rules]
+        buttons = [ai_play_first, player_first, settings, rules]
         while start:
             # sticking to fps
             self.clock.tick(FPS)
@@ -157,7 +165,17 @@ class Game:
                     return False
                 elif event.type == pg.MOUSEBUTTONDOWN:
                     # if mouse is pressed check button overlapping
-                    if play.triggered(channel=self.click_sound_channel,
+                    if ai_play_first.triggered(channel=self.click_sound_channel,
+                                      sound=self.click_sound,
+                                      playing=self.sound_state):
+                        self.__init__(self.size)
+                        self.started = True
+                        # ai first move
+                        ai_move = self.ai_player.strategy_move(self.state)
+                        self.state[ai_move[0]][ai_move[1]] = self.move
+                        self.move = 3-self.move
+                        return True
+                    if player_first.triggered(channel=self.click_sound_channel,
                                       sound=self.click_sound,
                                       playing=self.sound_state):
                         self.__init__(self.size)

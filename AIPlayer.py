@@ -15,19 +15,19 @@ class AIPlayer:
         for c in range(len(board)):
             side_positions.append([0,c])
         return side_positions
-    
+
     def get_bottom_side_positions(self, board):
         side_positions = []
         for c in range(len(board)):
             side_positions.append([len(board)-1, c])
         return side_positions
-    
+
     def get_left_side_positions(self, board):
         side_positions = []
         for c in range(len(board)):
             side_positions.append([c,0])
         return side_positions
-    
+
     def get_right_side_positions(self, board):
         side_positions = []
         for c in range(len(board)):
@@ -99,8 +99,8 @@ class AIPlayer:
         self.current_player = self.get_current_player()
         best_move = None
         best_result = -1
-        wins = [0]*len(moves)
-        visits = [0]*len(moves)
+        win_count = [0]*len(moves)
+        visit_count = [0]*len(moves)
         for i in range(1000):
             for i, move in enumerate(moves):
                 to_play = self.current_player
@@ -112,9 +112,9 @@ class AIPlayer:
                     self.game.move = self.get_opponent_player(self.game.move)
                     return
                 result = self.simulation_play_out(board)
-                wins[i] += result
-                visits[i] += 1
-                win_rate = wins[i] / visits[i]
+                win_count[i] += result
+                visit_count[i] += 1
+                win_rate = win_count[i] / visit_count[i]
                 if win_rate > best_result:
                     best_result=win_rate
                     best_move=move
@@ -178,11 +178,29 @@ class AIPlayer:
             #
             bridges.append([r+1,c+1])
         return bridges
-    
+
     def get_center_move(self, board):
         # ai play first
         size = len(board)
         return [size//2, size//2]
+
+    def bfs_build_path(self, board, current, targets, unwanted, path, paths):
+        if current in path:
+            return
+        if current in unwanted:
+            return
+        path.append(current)
+        if current in targets:
+            path.sort()
+            if path not in paths:
+                paths.append(path)
+            return
+        neighbours = self.get_neighbours(board, current[0], current[1])
+        for neighbour in neighbours:
+            if neighbour not in path:
+                path_copy = deepcopy(path)
+                self.bfs_build_path(board, neighbour, targets, unwanted, path_copy, paths)
+            
 
     def rebuild_path(self, board, came_from, cost_so_far, paths, path, cost_left, current_node):
         if cost_left == -1:
@@ -195,6 +213,12 @@ class AIPlayer:
                     p_copy.append(pos)
                     self.rebuild_path(board, came_from, cost_so_far, paths, p_copy, cost_left-1, pos)
 
+    def rebuild_a_star_path(self, pos, came_from):
+        path = []
+        while pos != None:
+            path.append(pos)
+            pos = came_from[self.encode_move(pos[0], pos[1])]
+        return path
 
     def get_all_shortest_path_a_star(self, board, start, end):
         heap = [(-1, start)]
@@ -215,47 +239,40 @@ class AIPlayer:
                     priority = new_cost + self.compute_manhattan_distance(pos[0], pos[1], end[0], end[1])
                     heappush(heap, (priority, pos))
                     came_from[self.encode_move(pos[0], pos[1])] = current
-        paths.append(self.rebuild_path(end, came_from))
+        paths.append(self.rebuild_a_star_path(end, came_from))
         return paths
-    
-    def get_all_shortest_path_dijstra(self, board, start, end):
+
+    def get_all_shortest_path_dijstra(self, board, start, end, color):
         heap = [(0, start)]
         cost_so_far = {}
         came_from = {}
         came_from[self.encode_move(start[0], start[1])] = None
         cost_so_far[self.encode_move(start[0], start[1])] = 0
         paths = []
+        path_exist = False
         while len(heap) > 0:
             current = heappop(heap)[1]
             if current == end:
+                path_exist = True
                 break
-            neighbours = self.get_neighbours(board, current[0], current[1])
+            neighbours = []
+            neighbours1 = self.get_neighbours_with_this_color(board, current[0], current[1], 0)
+            for neighbour in neighbours1:
+                neighbours.append(neighbour)
+            neighbours2 = self.get_neighbours_with_this_color(board, current[0], current[1], color)
+            for neighbour in neighbours2:
+                if neighbour not in neighbours:
+                    neighbours.append(neighbour)
             for pos in neighbours:
                 new_cost = cost_so_far[self.encode_move(current[0], current[1])] + 1
                 if self.encode_move(pos[0], pos[1]) not in cost_so_far or new_cost < cost_so_far[self.encode_move(pos[0], pos[1])]:
                     cost_so_far[self.encode_move(pos[0], pos[1])] = new_cost
                     heappush(heap, (new_cost, pos))
                     came_from[self.encode_move(pos[0], pos[1])] = current
-        min_cost = cost_so_far[self.encode_move(end[0], end[1])]
-        self.rebuild_path(board, came_from, cost_so_far, paths, [end], min_cost-1, end)
-        # min_cost = cost_so_far[self.encode_move(end[0], end[1])]
-        # for pos_string, cost in cost_so_far.items():
-        #     pos = self.decode_move(pos_string)
-        #     if cost == min_cost-1 and pos != came_from[self.encode_move(end[0], end[1])]  and end in self.get_neighbours(board, pos[0], pos[1]):
-        #         path = self.rebuild_path(pos, came_from)
-        #         path.append(end)
-        #         paths.append(path)
+        if path_exist:
+            min_cost = cost_so_far[self.encode_move(end[0], end[1])]
+            self.rebuild_path(board, came_from, cost_so_far, paths, [end], min_cost-1, end)
         return paths
-
-
-    def compute_all_paths_connect_two_sides(self, board, color):
-        shortest_paths = []
-        if color == 1:
-            top_side_positions = self.get_top_side_positions(board)
-            bottom_side_positions = self.get_bottom_side_positions(board)
-            for top_side_position in top_side_positions:
-                for bottom_side_position in bottom_side_positions:
-                    shortest_paths.append()
 
     def encode_move(self, r, c):
         return "%s-%s"%(r,c)
@@ -272,93 +289,113 @@ class AIPlayer:
             distances.append(self.compute_manhattan_distance(r, c, target[0], target[1]))
         return min(distances)
 
-    def AlphaBeta(self, board, depth , alpha, beta, current_move):
-        if depth == 0 or len(self.get_legal_moves(board)) == 0:
-            return self.evaluate(board, current_move)
-        score = -sys.maxsize - 1
-        moves = self.get_legal_moves(board)
-        for move in moves:
-            self.play_move(board, move[0], move[1])
-            current_score = - self.AlphaBeta(board, depth-1, -beta, -alpha, move)
-            if current_score > score:
-                score = current_score
-            if score > alpha:
-                alpha = score
-            self.undo(board, move[0], move[1])
-            if alpha >= beta:
-                return alpha
-        return score
+    # def alphaBeta(self, board):
+    #     max_score = -1000000000
+    #     moves = self.get_legal_moves(board)
+    #     board_copy = deepcopy(board)
+    #     self.current_player = 3-self.current_player
+    #     for move in moves:
+    #         print(move)
+    #         board_copy[move[0]][move[1]] = self.current_player
+    #         score = self.evaluate(board, move)
+    #         board_copy[move[0]][move[1]] = 0
+    #         if score > max_score:
+    #             max_score = score
+    #     self.current_player = 3-self.current_player
+    #     return max_score
+
+    def find_all_possible_paths_contain_current_move(self, board, color, current_move, moves_so_far, opponent_moves_so_far, target_side1, target_side2):
+        """
+        This finds all possible paths that are generated from the existing moves and contains the current move
+        """
+        paths = []
+        top_side_positions = self.get_top_side_positions(board)
+        bottom_side_positions = self.get_bottom_side_positions(board)
+        for move in moves_so_far:
+            to_target1 = []
+            to_target2 = []
+            for pos in target_side1:
+                ps = self.get_all_shortest_path_dijstra(board, move, pos, color)
+                for p in ps:
+                    p.sort()
+                    if p not in to_target1:
+                        to_target1.append(p)
+            for pos in target_side2:
+                ps = self.get_all_shortest_path_dijstra(board, move, pos, color)
+                for p in ps:
+                    p.sort()
+                    if p not in to_target2:
+                        to_target2.append(p)
+            for path1 in to_target1:
+                for path2 in to_target2:
+                    p = path1 + path2
+                    path = []
+                    for pos in p:
+                        if pos not in path:
+                            path.append(pos)
+                    path.sort()
+                    if path not in paths and not self.is_opponent_occupy_in_this_path(path, opponent_moves_so_far) and current_move in path:
+                        paths.append(path)
+        return paths        
 
     def evaluate(self, board, current_move):
+        """
+        This is a heuristic function that evaluate the board state if this current_move is played
+        and return a score for this current_move
+        """
         color = self.current_player
         moves_so_far = self.get_positions(board, color)
         opponent_moves_so_far = self.get_positions(board, 3-color)
         score = 0
         paths = []
         if color == 1:
+            # green player (1st player)
             top_side_positions = self.get_top_side_positions(board)
             bottom_side_positions = self.get_bottom_side_positions(board)
-            for move in moves_so_far:
-                to_top = []
-                to_bottom = []
-                for pos in top_side_positions:
-                    ps = self.get_all_shortest_path_dijstra(board, move, pos)
-                    for p in ps:
-                        p.sort()
-                        if p not in to_top:
-                            to_top.append(p)
-                for pos in bottom_side_positions:
-                    ps = self.get_all_shortest_path_dijstra(board, move, pos)
-                    for p in ps:
-                        p.sort()
-                        if p not in to_bottom:
-                            to_bottom.append(p)
-                for path1 in to_top:
-                    for path2 in to_bottom:
-                        p = path1 + path2
-                        path = []
-                        for pos in p:
-                            if pos not in path:
-                                path.append(pos)
-                        path.sort()
-                        if path not in paths and not self.is_opponent_occupy_in_this_path(path, opponent_moves_so_far) and current_move in path:
-                            paths.append(path)
+            paths = self.find_all_possible_paths_contain_current_move(board, color, current_move, moves_so_far, opponent_moves_so_far, top_side_positions, bottom_side_positions)
         elif color == 2:
+            # blue player
             left_side_positions = self.get_left_side_positions(board)
             right_side_positions = self.get_right_side_positions(board)
-            for move in moves_so_far:
-                to_left = []
-                to_right = []
-                for pos in left_side_positions:
-                    ps = self.get_all_shortest_path_dijstra(board, move, pos)
-                    for p in ps:
-                        p.sort()
-                        if p not in to_left:
-                            to_left.append(p)
-                for pos in right_side_positions:
-                    ps = self.get_all_shortest_path_dijstra(board, move, pos)
-                    for p in ps:
-                        p.sort()
-                        if p not in to_right:
-                            to_right.append(p)
-                for path1 in to_left:
-                    for path2 in to_right:
-                        p = path1 + path2
-                        path = []
-                        for pos in p:
-                            if pos not in path:
-                                path.append(pos)
-                        path.sort()
-                        if path not in paths and not self.is_opponent_occupy_in_this_path(path, opponent_moves_so_far) and current_move in path:
-                            paths.append(path)
-        min_move = 100
+            paths = self.find_all_possible_paths_contain_current_move(board, color, current_move, moves_so_far, opponent_moves_so_far, left_side_positions, right_side_positions)
+        min_move = 1000 # this keeps the minimum number of moves to finish the shortest path 
         for path in paths:
+            # calculate number of move that are still needed to finish this path
             num_of_moves = self.compute_number_of_move_to_finish_this_path(path, moves_so_far)
             if num_of_moves < min_move:
+                # update min move if there is a smaller
                 min_move = num_of_moves
+        # determine whehter or give bonus to bridge positions
         score -= min_move
-        score += self.compute_number_of_bridge(board, current_move, moves_so_far)
+        bonus = self.compute_number_of_bridge(board, current_move, moves_so_far, color)
+        score += bonus
         return score
+    
+    def is_existing_move_occupied_two_sides(self, board, current_move, moves_so_far, color):
+        if color == 1:
+            top = False
+            bottom = False
+            top_positions = self.get_top_side_positions(board)
+            bottom_positions = self.get_bottom_side_positions(board)
+            for move in moves_so_far:
+                if move != current_move:
+                    if move in top_positions:
+                        top = True
+                    if move in bottom_positions:
+                        bottom = True
+            return top and bottom
+        elif color == 2:
+            left = False
+            right = False
+            left_positions = self.get_left_side_positions(board)
+            right_positions = self.get_right_side_positions(board)
+            for move in moves_so_far:
+                if move != current_move:
+                    if move in left_positions:
+                        left = True
+                    if move in right_positions:
+                        right = True
+            return left and right
 
     def is_opponent_occupy_in_this_path(self, path, opponent_moves):
         for move in opponent_moves:
@@ -366,12 +403,20 @@ class AIPlayer:
                 return True
         return False
 
-    def compute_number_of_bridge(self, board, current_move, moves):
+    def compute_number_of_bridge(self, board, current_move, moves, color):
         bonus = 0
         for move in moves:
             bridges = self.get_bridge_positions(board, move[0], move[1])
             if current_move in bridges:
-                bonus += 0.1
+                current_move_neighbours = self.get_neighbours(board, current_move[0], current_move[1])
+                move_neighbours = self.get_neighbours(board, move[0], move[1])
+                common_neighbours = []
+                for current_move_neighbour in current_move_neighbours:
+                    if current_move_neighbour in move_neighbours:
+                        common_neighbours.append(current_move_neighbour)
+                if self.is_empty(board, common_neighbours[0][0], common_neighbours[0][1]) and self.is_empty(board, common_neighbours[1][0], common_neighbours[1][1]):
+                    bonus += 0.01
+                    return bonus
         return bonus
 
     def compute_number_of_move_to_finish_this_path(self, path, moves):
@@ -393,11 +438,8 @@ class AIPlayer:
         scores = []
         for move in moves:
             board_copy[move[0]][move[1]] = self.current_player
-            scores.append([self.evaluate(board_copy, move), move])
+            score =  self.evaluate(board_copy, move)
+            scores.append([score, move])
             board_copy[move[0]][move[1]] = 0
-            # self.play_move(board_copy, move[0], move[1])
-            # scores.append([self.AlphaBeta(board_copy, 1, -1000, 1000, move), move])
-            # self.undo(board, move[0], move[1])
-        scores.sort(key=lambda x: int(x[0]))
-        print(scores)
+        scores.sort(key=lambda x: x[0])
         return scores[-1][1]
