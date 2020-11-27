@@ -6,9 +6,8 @@ import sys
 
 class AIPlayer:
 
-    def __init__(self, game):
-        self.game = game
-        self.evaluations = [[0 for _ in range(self.game.size)] for __ in range(self.game.size)]
+    def __init__(self):
+        pass
 
     def get_top_side_positions(self, board):
         side_positions = []
@@ -45,14 +44,11 @@ class AIPlayer:
 
     def get_legal_moves(self, board):
         moves = []
-        for r in range(self.game.size):
-            for c in range(self.game.size):
+        for r in range(len(board)):
+            for c in range(len(board)):
                 if self.is_empty(board, r, c):
                     moves.append([r,c])
         return moves
-
-    def get_current_player(self):
-        return self.game.move
 
     def get_opponent_player(self, current_player):
         return 3 - current_player
@@ -67,15 +63,19 @@ class AIPlayer:
 
     def check_win(self, board):
         '''checks if any of the players have won'''
-        for y in range(self.game.size):
+        for y in range(len(board)):
             if board[y][0] == 2:
-                if DFS(Point(y, 0), board, lambda v: (v.Y == self.game.size-1), 2):
+                if DFS(Point(y, 0), board, lambda v: (v.Y == len(board)-1), 2):
                     return 2
-        for x in range(self.game.size):
+        for x in range(len(board)):
             if board[0][x] == 1:
-                if DFS(Point(0, x), board, lambda v: (v.X == self.game.size-1), 1):
+                if DFS(Point(0, x), board, lambda v: (v.X == len(board)-1), 1):
                     return 1
         return 0
+
+    def random_player(self, board):
+        moves = self.get_legal_moves(board)
+        return random.choice(moves)
 
     def simulation_play_out(self, board):
         result = self.check_win(board)
@@ -89,40 +89,41 @@ class AIPlayer:
         for move in simulation_moves[::-1]:
             self.undo(board, move[0], move[1])
         if result == self.current_player:
-            return 1
-        else:
             return -1
+        else:
+            return 1
 
-    def gen_move_by_simulation_based_strategy(self):
-        board = deepcopy(self.game.state)
+    def gen_move_by_simulation_based_strategy(self, board, color):
+        """
+        Evaluation each move by simulate numbers of random playouts:
+            win_count / visit_count
+        """
         moves = self.get_legal_moves(board)
-        self.current_player = self.get_current_player()
+        if len(moves) == len(board)*len(board):
+            # open move: to play near center
+            return self.get_center_move(board)
+        board = deepcopy(board)
+        self.current_player = color
         best_move = None
         best_result = -1
         win_count = [0]*len(moves)
         visit_count = [0]*len(moves)
-        for i in range(1000):
+        for i in range(500):
+            # iterations of simulation runs for every legal moves
             for i, move in enumerate(moves):
-                to_play = self.current_player
                 self.play_move(board, move[0], move[1])
-                if self.check_win(board) == to_play:
+                if self.check_win(board) == color:
                     # if this move just leads to win
-                    self.undo(board, move[0], move[1])
-                    self.play_move(self.game.state, move[0], move[1])
-                    self.game.move = self.get_opponent_player(self.game.move)
-                    return
+                    return move
                 result = self.simulation_play_out(board)
                 win_count[i] += result
                 visit_count[i] += 1
-                win_rate = win_count[i] / visit_count[i]
-                if win_rate > best_result:
-                    best_result=win_rate
-                    best_move=move
-                    self.best_move=best_move
                 self.undo(board, move[0], move[1])
-        self.play_move(self.game.state, best_move[0], best_move[1])
-        self.game.move = self.get_opponent_player(self.game.move)
-        return
+        for i in range(len(moves)):
+            if win_count[i] / visit_count[i] > best_result:
+                best_result = win_count[i] / visit_count[i]
+                best_move = moves[i]
+        return best_move
 
     def get_positions(self, board, color):
         positions = []
@@ -338,12 +339,14 @@ class AIPlayer:
                         paths.append(path)
         return paths        
 
-    def evaluate(self, board, current_move):
+    def evaluate(self, board, current_move, color):
         """
         This is a heuristic function that evaluate the board state if this current_move is played
         and return a score for this current_move
         """
-        color = self.current_player
+        if self.check_win(board) == color:
+            # if game end
+            return 1000
         moves_so_far = self.get_positions(board, color)
         opponent_moves_so_far = self.get_positions(board, 3-color)
         score = 0
@@ -426,9 +429,8 @@ class AIPlayer:
                 count -= 1
         return count
 
-    def strategy_move(self, board):
+    def strategy_move(self, board, color):
         center_move = self.get_center_move(board)
-        self.current_player = self.get_current_player()
         if self.is_empty(board, center_move[0], center_move[1]):
             # if center move is empty play a move there
             #self.play_move(board, center_move[0], center_move[1])
@@ -437,9 +439,15 @@ class AIPlayer:
         moves = self.get_legal_moves(board)
         scores = []
         for move in moves:
-            board_copy[move[0]][move[1]] = self.current_player
-            score =  self.evaluate(board_copy, move)
-            scores.append([score, move])
+            # evaluate if this is your move
+            board_copy[move[0]][move[1]] = color
+            score1 =  self.evaluate(board_copy, move, color)
             board_copy[move[0]][move[1]] = 0
+            #scores.append([score, move])
+            # evaluate if this is opponent move
+            board_copy[move[0]][move[1]] = 3 - color
+            score2 = self.evaluate(board_copy, move, 3-color)
+            board_copy[move[0]][move[1]] = 0
+            scores.append([score2+score1, move])
         scores.sort(key=lambda x: x[0])
         return scores[-1][1]

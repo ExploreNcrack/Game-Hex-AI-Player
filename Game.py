@@ -20,7 +20,8 @@ class Game:
         self.move = 1
         self.started = False
         self.sound_state = True
-        self.ai_player = AIPlayer(self)
+        self.ai_player = AIPlayer()
+        self.ai_type = None
 
     def loadData(self):
         '''load all the data (images, files, etc)'''
@@ -80,10 +81,14 @@ class Game:
                     #         unwanted.append(top)
                     # self.ai_player.bfs_build_path(board, [0,0], [[2,0]], unwanted, [], paths)
                     # print(paths)
-
-                    ai_move = self.ai_player.strategy_move(self.state)
-                    self.state[ai_move[0]][ai_move[1]] = self.move
-                    self.move = 3-self.move 
+                    if self.checkWin() == 0 and self.ai_type == "Simulation Based":
+                        ai_move = self.ai_player.gen_move_by_simulation_based_strategy(self.state, self.move)
+                        self.state[ai_move[0]][ai_move[1]] = self.move
+                        self.move = 3-self.move
+                    if self.checkWin() == 0 and self.ai_type == "Strategy Based":
+                        ai_move = self.ai_player.strategy_move(self.state, self.move)
+                        self.state[ai_move[0]][ai_move[1]] = self.move
+                        self.move = 3-self.move
 
                     #print(self.ai_player.get_all_shortest_path_dijstra(self.state, [0,0],[4,0]))
                     
@@ -150,11 +155,13 @@ class Game:
         '''shows start screen, returns True if the game has started'''
         start = True
         # initializing buttons
-        ai_play_first = Button((W-150, 2*H/3), 30, 'AI Play First')
-        player_first = Button((150, 2*H/3), 30, 'You Play First')
+        simulation_based_ai_play_first = Button((300, 2*H/3+50), 20, 'Simulation Based AI Play First')
+        player_first_against_simulation_based_ai = Button((300, 2*H/3), 20, 'You Play First Against Simulation Based AI')
+        strategy_based_ai_play_first = Button((300, 2*H/3-50), 20, 'Strategy Based AI Play First')
+        player_first_against_strategy_based_ai = Button((300, 2*H/3-100), 20, 'You Play First Against Strategy Based AI')
         settings = Button((150, H-75), 50, 'Settings')
         rules = Button((W-100, H-75), 50, 'Rules')
-        buttons = [ai_play_first, player_first, settings, rules]
+        buttons = [strategy_based_ai_play_first, player_first_against_strategy_based_ai, simulation_based_ai_play_first, player_first_against_simulation_based_ai, settings, rules]
         while start:
             # sticking to fps
             self.clock.tick(FPS)
@@ -165,21 +172,41 @@ class Game:
                     return False
                 elif event.type == pg.MOUSEBUTTONDOWN:
                     # if mouse is pressed check button overlapping
-                    if ai_play_first.triggered(channel=self.click_sound_channel,
+                    if strategy_based_ai_play_first.triggered(channel=self.click_sound_channel,
                                       sound=self.click_sound,
                                       playing=self.sound_state):
                         self.__init__(self.size)
                         self.started = True
+                        self.ai_type = "Strategy Based"
                         # ai first move
-                        ai_move = self.ai_player.strategy_move(self.state)
+                        ai_move = self.ai_player.strategy_move(self.state, self.move)
                         self.state[ai_move[0]][ai_move[1]] = self.move
                         self.move = 3-self.move
                         return True
-                    if player_first.triggered(channel=self.click_sound_channel,
+                    if player_first_against_strategy_based_ai.triggered(channel=self.click_sound_channel,
                                       sound=self.click_sound,
                                       playing=self.sound_state):
                         self.__init__(self.size)
                         self.started = True
+                        self.ai_type = "Strategy Based"
+                        return True
+                    if player_first_against_simulation_based_ai.triggered(channel=self.click_sound_channel,
+                                      sound=self.click_sound,
+                                      playing=self.sound_state):
+                        self.__init__(self.size)
+                        self.started = True
+                        self.ai_type = "Simulation Based"
+                        return True
+                    if simulation_based_ai_play_first.triggered(channel=self.click_sound_channel,
+                                      sound=self.click_sound,
+                                      playing=self.sound_state):
+                        self.__init__(self.size)
+                        self.started = True
+                        self.ai_type = "Simulation Based"
+                        # ai first move
+                        ai_move = self.ai_player.gen_move_by_simulation_based_strategy(self.state, self.move)
+                        self.state[ai_move[0]][ai_move[1]] = self.move
+                        self.move = 3-self.move
                         return True
                     if rules.triggered(channel=self.click_sound_channel,
                                        sound=self.click_sound,

@@ -8,7 +8,6 @@ from AIPlayer import AIPlayer
 
 game = Game(SIZE)
 game.loadData()
-ai_player = AIPlayer(game)
 # button initializing
 pause = Button((30, 30), 50, img=game.pause_img)
 buttons = [pause]
